@@ -2,14 +2,17 @@
 数据清洗模块：异常值标记、数据质量报告
 """
 import pandas as pd
-import numpy as np
+
+# 共享常量
+DEFAULT_OEE_THRESHOLD = 0.90
+OEE_ABNORMAL_HIGH = 1.5       # OEE 超高异常阈值（> 此值视为数采异常）
 
 
 def flag_abnormal_oee(df, col='设备稼动率'):
     """
     标记异常的稼动率值
     - 负值：数采异常
-    - > 1.5：数采异常（理论上最大为 1，但允许小幅超出）
+    - > OEE_ABNORMAL_HIGH：数采异常（理论上最大为 1，但允许小幅超出）
     - 返回新增列：oee_abnormal (bool), oee_abnormal_type (str)
     """
     if col not in df.columns:
@@ -20,7 +23,7 @@ def flag_abnormal_oee(df, col='设备稼动率'):
     df['oee_abnormal_type'] = '正常'
 
     neg_mask = df[col] < 0
-    high_mask = df[col] > 1.5
+    high_mask = df[col] > OEE_ABNORMAL_HIGH
 
     df.loc[neg_mask, 'oee_abnormal'] = True
     df.loc[neg_mask, 'oee_abnormal_type'] = '负数异常'
@@ -28,17 +31,6 @@ def flag_abnormal_oee(df, col='设备稼动率'):
     df.loc[high_mask, 'oee_abnormal'] = True
     df.loc[high_mask, 'oee_abnormal_type'] = '超高异常'
 
-    return df
-
-
-def flag_missing_params(df, param_cols):
-    """
-    标记工艺参数缺失情况
-    返回 DataFrame，新增 'param_missing_count' 列
-    """
-    df = df.copy()
-    valid_param_cols = [c for c in param_cols if c in df.columns]
-    df['param_missing_count'] = df[valid_param_cols].isna().sum(axis=1)
     return df
 
 
@@ -67,7 +59,7 @@ def quality_report(df):
     if 'oee_abnormal' in df.columns:
         abnormal_count = df['oee_abnormal'].sum()
     elif '设备稼动率' in df.columns:
-        abnormal_count = ((df['设备稼动率'] < 0) | (df['设备稼动率'] > 1.5)).sum()
+        abnormal_count = ((df['设备稼动率'] < 0) | (df['设备稼动率'] > OEE_ABNORMAL_HIGH)).sum()
     else:
         abnormal_count = 0
 
@@ -110,9 +102,9 @@ def get_param_groups():
     }
 
 
-def get_oee_columns():
-    """返回稼动率分析相关列"""
-    return {
-        '指标列': ['设备稼动率', '开合模次数'],
-        '时间分配': ['有效生产时长(min)', '离线时长(min)', '待机时长(min)', '报警时长(min)'],
-    }
+def get_all_params():
+    """返回所有工艺参数的展平列表（按参数组顺序）"""
+    all_params = []
+    for group_params in get_param_groups().values():
+        all_params.extend(group_params)
+    return all_params

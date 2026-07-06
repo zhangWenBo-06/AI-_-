@@ -97,7 +97,9 @@ if proc_file and util_file:
         store_data_in_session(proc_df, util_df, merged_df, proc_file.name, util_file.name)
 
         # 保存到本地磁盘缓存
-        save_cache_to_disk()
+        cache_ok = save_cache_to_disk()
+        if not cache_ok:
+            st.warning("⚠️ 本地缓存保存失败，下次启动无法自动恢复数据")
 
         st.success(f"✅ 数据加载完成！两份报表关联成功，共 **{len(merged_df):,}** 条记录")
 

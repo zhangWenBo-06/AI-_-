@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 
 from utils.data_loader import is_data_loaded, get_data_summary
+from utils.cleaner import DEFAULT_OEE_THRESHOLD
 from utils.viz import (
     plot_oee_heatmap, plot_oee_hourly_bars,
     plot_loss_pie, plot_cycle_scatter,

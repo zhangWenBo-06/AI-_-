@@ -95,6 +95,7 @@ if st.session_state.get('data_loaded', False):
     if merged_df is not None and not merged_df.empty:
         from utils.analysis import get_all_machines_oee_ranking
         from utils.viz import plot_oee_ranking_bars, get_plotly_config
+        from utils.cleaner import DEFAULT_OEE_THRESHOLD
 
         ranking_df = get_all_machines_oee_ranking(merged_df)
         if ranking_df is not None and not ranking_df.empty:
@@ -112,8 +113,8 @@ if st.session_state.get('data_loaded', False):
                           delta=f"机台 {ranking_df['机台号'].iloc[0]}")
                 st.metric("最低 OEE", f"{ranking_df['平均OEE'].min():.1%}",
                           delta=f"机台 {ranking_df['机台号'].iloc[-1]}")
-                st.metric("OEE ≥ 90% 机台数",
-                          f"{int((ranking_df['平均OEE'] >= 0.9).sum())}/{len(ranking_df)}")
+                st.metric(f"OEE ≥ {DEFAULT_OEE_THRESHOLD:.0%} 机台数",
+                          f"{int((ranking_df['平均OEE'] >= DEFAULT_OEE_THRESHOLD).sum())}/{len(ranking_df)}")
 
 st.markdown("---")
 

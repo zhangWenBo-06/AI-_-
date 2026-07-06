@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 
 from utils.data_loader import is_data_loaded, get_data_summary
-from utils.cleaner import get_param_groups
+from utils.cleaner import get_param_groups, get_all_params, DEFAULT_OEE_THRESHOLD
 from utils.viz import (
     plot_param_trend, plot_param_box,
     plot_multi_machine_trend, plot_correlation_bars,
@@ -170,9 +170,7 @@ elif mode == "🔄 多机台对比":
         )
 
         # 参数选择
-        all_params = []
-        for group_params in param_groups.values():
-            all_params.extend(group_params)
+        all_params = get_all_params()
         compare_param = st.selectbox(
             "选择对比参数",
             all_params,

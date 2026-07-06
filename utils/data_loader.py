@@ -4,7 +4,6 @@
 import pandas as pd
 import streamlit as st
 import os
-import pickle
 from datetime import datetime
 from io import BytesIO
 
@@ -18,14 +17,8 @@ def normalize_date_str(date_val):
     if pd.isna(date_val):
         return None
     s = str(date_val).strip()
-    for sep in ['/', '-']:
-        if sep in s:
-            parts = s.split(' ')[0].split(sep)
-            if len(parts) == 3:
-                y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-                return f"{y:04d}-{m:02d}-{d:02d}"
     try:
-        dt = pd.to_datetime(s)
+        dt = pd.to_datetime(s, dayfirst=False)
         return dt.strftime('%Y-%m-%d')
     except Exception:
         return s
@@ -81,6 +74,10 @@ def merge_reports(process_df, util_df):
     """按 (机台号, 日期, 时间段) 内连接两个报表"""
     if process_df is None or util_df is None:
         return None, "请先加载两个报表"
+
+    # 复制入参，避免修改调用方的原始 DataFrame
+    process_df = process_df.copy()
+    util_df = util_df.copy()
 
     join_keys = ['机台号', '日期', '时间段']
     for key in join_keys:
@@ -184,7 +181,8 @@ def save_cache_to_disk():
             f.write(f"rows={len(merged_df)}\n")
             f.write(f"machines={st.session_state['merged_df']['机台号'].nunique()}\n")
         return True
-    except Exception:
+    except Exception as e:
+        st.toast(f"⚠️ 本地缓存保存失败: {e}", icon="⚠️")
         return False
 
 

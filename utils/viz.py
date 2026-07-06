@@ -6,6 +6,19 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
+from utils.cleaner import DEFAULT_OEE_THRESHOLD, OEE_ABNORMAL_HIGH
+
+
+def _empty_fig(message="暂无数据"):
+    """生成统一的空数据占位图表"""
+    fig = go.Figure()
+    fig.add_annotation(text=message, xref="paper", yref="paper",
+                       x=0.5, y=0.5, showarrow=False, font=dict(size=16))
+    return fig
+
+
+# 通用 layout 样式的默认值
+_LAYOUT_BASE = dict(template='plotly_white', margin=dict(l=40, r=40, t=60, b=40))
 
 
 def plot_param_trend(df, machine, selected_params, date_range=None):
@@ -14,10 +27,7 @@ def plot_param_trend(df, machine, selected_params, date_range=None):
     """
     machine_df = df[df['机台号'] == machine].copy()
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=16))
-        return fig
+        return _empty_fig("该机台无数据")
 
     if date_range and len(date_range) == 2:
         machine_df = machine_df[
@@ -26,10 +36,7 @@ def plot_param_trend(df, machine, selected_params, date_range=None):
         ]
 
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="所选日期范围内无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=16))
-        return fig
+        return _empty_fig("所选日期范围内无数据")
 
     machine_df = machine_df.sort_values('_timestamp')
 
@@ -41,10 +48,7 @@ def plot_param_trend(df, machine, selected_params, date_range=None):
                         and machine_df[c].dtype in ('int64', 'float64')][:6]
 
     if not valid_params:
-        fig = go.Figure()
-        fig.add_annotation(text="无可用参数列", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False, font=dict(size=16))
-        return fig
+        return _empty_fig("无可用参数列")
 
     temp_params = [p for p in valid_params if '温度' in p]
     other_params = [p for p in valid_params if '温度' not in p]
@@ -112,12 +116,9 @@ def plot_oee_heatmap(df, machine):
     """
     machine_df = df[df['机台号'] == machine].copy()
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("该机台无数据")
 
-    machine_df['_hour'] = machine_df['时间段'].str.extract(r'(\d{2}):')[0]
+    machine_df['_hour'] = machine_df['时间段'].str.extract(r'(\d{1,2}):')[0]
     machine_df['_hour'] = pd.to_numeric(machine_df['_hour'], errors='coerce')
 
     # 裁剪到 [0,1] 避免异常值颜色失真
@@ -163,12 +164,9 @@ def plot_oee_hourly_bars(df, machine):
     """
     machine_df = df[df['机台号'] == machine].copy()
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("该机台无数据")
 
-    machine_df['_hour'] = machine_df['时间段'].str.extract(r'(\d{2}):')[0]
+    machine_df['_hour'] = machine_df['时间段'].str.extract(r'(\d{1,2}):')[0]
     machine_df['_hour'] = pd.to_numeric(machine_df['_hour'], errors='coerce')
 
     dates = sorted(machine_df['日期'].unique())
@@ -183,8 +181,8 @@ def plot_oee_hourly_bars(df, machine):
             hovertemplate='%{x}<br>稼动率: %{y:.0%}<extra>%{data.name}</extra>',
         ))
 
-    fig.add_hline(y=0.9, line_dash="dash", line_color="red",
-                  annotation_text="90% 阈值", annotation_position="bottom right")
+    fig.add_hline(y=DEFAULT_OEE_THRESHOLD, line_dash="dash", line_color="red",
+                  annotation_text=f"{DEFAULT_OEE_THRESHOLD:.0%} 阈值", annotation_position="bottom right")
 
     fig.update_layout(
         title=f'机台 {machine} — 按天每小时稼动率对比',
@@ -207,10 +205,7 @@ def plot_loss_pie(df, machine):
     """
     machine_df = df[df['机台号'] == machine].copy()
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("该机台无数据")
 
     loss_cols = {
         '离线时长': '离线时长(min)',
@@ -228,11 +223,8 @@ def plot_loss_pie(df, machine):
                 labels.append(label)
 
     if not values or sum(values) == 0:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无不稼动时长<br>（所有时段都在生产）",
-                           xref="paper", yref="paper", x=0.5, y=0.5,
-                           showarrow=False, font=dict(size=14, color='green'))
-        fig.update_layout(height=350)
+        fig = _empty_fig("该机台无不稼动时长<br>（所有时段都在生产）")
+        fig.update_layout(font=dict(color='green'), height=350)
         return fig
 
     colors_pie = ['#ff6b6b', '#ffd93d', '#6bcb77']
@@ -263,16 +255,10 @@ def plot_cycle_scatter(df, machine):
     """
     machine_df = df[df['机台号'] == machine].copy()
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("该机台无数据")
 
     if '开合模次数' not in machine_df.columns:
-        fig = go.Figure()
-        fig.add_annotation(text="缺少开合模次数数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("缺少开合模次数数据")
 
     fig = go.Figure()
 
@@ -321,17 +307,11 @@ def plot_param_box(df, machine, selected_params):
     """
     machine_df = df[df['机台号'] == machine].copy()
     if machine_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="该机台无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("该机台无数据")
 
     valid_params = [p for p in selected_params if p in machine_df.columns and p != '时间段']
     if not valid_params:
-        fig = go.Figure()
-        fig.add_annotation(text="无可用参数", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("无可用参数")
 
     fig = go.Figure()
     for param in valid_params[:12]:
@@ -364,10 +344,7 @@ def plot_multi_machine_trend(df, machines, param, date_range=None):
     """
     valid_machines = [m for m in machines if m in df['机台号'].values]
     if not valid_machines:
-        fig = go.Figure()
-        fig.add_annotation(text="所选机台均无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("所选机台均无数据")
 
     fig = go.Figure()
     colors = px.colors.qualitative.Plotly
@@ -413,10 +390,7 @@ def plot_correlation_bars(corr_df, top_n=20):
     corr_df: compute_param_oee_correlation 返回的 DataFrame
     """
     if corr_df is None or corr_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="无足够数据计算相关性", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("无足够数据计算相关性")
 
     top_df = corr_df.head(top_n).iloc[::-1]  # 反转以便从上到下显示
 
@@ -454,10 +428,7 @@ def plot_oee_ranking_bars(ranking_df, top_n=15):
     机台 OEE 排名柱状图
     """
     if ranking_df is None or ranking_df.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="无数据", xref="paper", yref="paper",
-                           x=0.5, y=0.5, showarrow=False)
-        return fig
+        return _empty_fig("无数据")
 
     top_df = ranking_df.head(top_n).iloc[::-1]
 
@@ -478,8 +449,8 @@ def plot_oee_ranking_bars(ranking_df, top_n=15):
         customdata=top_df['≥90%占比'],
     ))
 
-    fig.add_vline(x=0.9, line_dash='dash', line_color='red',
-                  annotation_text='90%', annotation_position='top')
+    fig.add_vline(x=DEFAULT_OEE_THRESHOLD, line_dash='dash', line_color='red',
+                  annotation_text=f'{DEFAULT_OEE_THRESHOLD:.0%}', annotation_position='top')
 
     fig.update_layout(
         title='机台平均 OEE 排名',

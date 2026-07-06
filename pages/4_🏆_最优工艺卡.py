@@ -3,11 +3,10 @@
 """
 import streamlit as st
 import pandas as pd
-from io import BytesIO
 
 from utils.data_loader import is_data_loaded, get_data_summary
 from utils.analysis import find_all_machines_optimal
-from utils.cleaner import get_param_groups
+from utils.cleaner import get_param_groups, DEFAULT_OEE_THRESHOLD
 
 st.set_page_config(page_title="最优工艺卡", page_icon="🏆", layout="wide")
 st.title("🏆 最优工艺卡生成")
@@ -51,10 +50,10 @@ with control_col2:
         "OEE 阈值",
         min_value=0.80,
         max_value=1.0,
-        value=0.90,
+        value=DEFAULT_OEE_THRESHOLD,
         step=0.01,
         format="%.2f",
-        help="稼动率必须 ≥ 此阈值才视为达标，默认 0.90（即 90%）",
+        help=f"稼动率必须 ≥ 此阈值才视为达标，默认 {DEFAULT_OEE_THRESHOLD:.0%}",
     )
 
 with control_col3:
@@ -238,38 +237,6 @@ if st.session_state.analysis_result is not None:
             )
     else:
         st.info("没有找到符合条件的机台")
-
-    # ---- 全部机台导出 ----
-    # st.markdown("---")
-    # st.subheader("📥 导出最优工艺卡")
-
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        for machine in sorted(optimal_params.keys()):
-            params_info = optimal_params[machine]
-            df = params_info['params_df']
-
-            if df is not None and not df.empty:
-                sheet_name = f"{machine}"[:31]
-                df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-        if not summary_df.empty:
-            summary_df.to_excel(writer, sheet_name='最优时段摘要', index=False)
-
-    output.seek(0)
-
-    # st.download_button(
-    #     label=f"📥 下载全部最优工艺卡 Excel（{len(optimal_params)} 台机台）",
-    #     data=output,
-    #     file_name=f'最优工艺卡_{min_hours}h_{int(oee_threshold*100)}pct.xlsx',
-    #     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    #     type="primary",
-    # )
-
-    # st.caption(
-    #     "Excel 文件中每个机台一个 Sheet，每行一个工艺参数，"
-    #     "包含推荐值（中位数）、建议下限（Q25）、建议上限（Q75）及统计量。"
-    # )
 
 else:
     # ---- 无分析结果时的说明 ----

@@ -1,15 +1,16 @@
 """
 核心分析模块：滑动窗口查找最优时段、工艺参数统计、相关性分析
 """
+import hashlib
 import pandas as pd
-import numpy as np
 import streamlit as st
-from utils.cleaner import get_param_groups
+from utils.cleaner import get_param_groups, get_all_params, DEFAULT_OEE_THRESHOLD
 
 
-def find_optimal_windows(merged_df, machine, min_hours=12, oee_threshold=0.9):
+def find_optimal_windows(merged_df, machine, min_hours=12, oee_threshold=DEFAULT_OEE_THRESHOLD):
     """
-    对指定机台，用滑动窗口查找 OEE >= 阈值且连续 >= min_hours 的时段
+    对指定机台，用滑动窗口查找 OEE >= 阈值且连续 >= min_hours 的时段。
+    通过 _timestamp 差值检测数据缺口：连续两行时间差 > 1.5 小时视为断点。
     """
     df = merged_df[merged_df['机台号'] == machine].copy()
     if df.empty:
@@ -31,6 +32,11 @@ def find_optimal_windows(merged_df, machine, min_hours=12, oee_threshold=0.9):
         if df.loc[i, '_qualified']:
             j = i
             while j < n and df.loc[j, '_qualified']:
+                # 检测时间缺口：连续两行时间差 > 1.5 小时即断点
+                if j > i:
+                    time_gap = (df.loc[j, '_timestamp'] - df.loc[j - 1, '_timestamp']).total_seconds() / 3600
+                    if time_gap > 1.5:
+                        break
                 j += 1
 
             consecutive_hours = j - i
@@ -70,10 +76,7 @@ def compute_optimal_params(merged_df, machine, window):
     if window_df.empty:
         return None
 
-    param_groups = get_param_groups()
-    all_params = []
-    for group_params in param_groups.values():
-        all_params.extend(group_params)
+    all_params = get_all_params()
 
     valid_params = [p for p in all_params if p in window_df.columns]
     if not valid_params:
@@ -105,19 +108,22 @@ def compute_optimal_params(merged_df, machine, window):
     return result_df
 
 
-def find_all_machines_optimal(merged_df, min_hours=12, oee_threshold=0.9,
+def find_all_machines_optimal(merged_df, min_hours=12, oee_threshold=DEFAULT_OEE_THRESHOLD,
                                selected_machines=None):
     """
-    对所有（或选定的）机台查找最优窗口和工艺参数
-    结果会被 session_state 缓存，相同参数不重复计算
+    对所有（或选定的）机台查找最优窗口和工艺参数。
+    缓存 key 包含数据摘要，重新上传数据后缓存自动失效。
     """
     if merged_df is None or merged_df.empty:
         return None
 
     machines = selected_machines if selected_machines else sorted(merged_df['机台号'].unique())
 
-    # 缓存键
-    cache_key = f"analysis_{min_hours}_{oee_threshold}_{'_'.join(sorted(machines))}"
+    # 缓存键：包含数据摘要（行数+机台数），数据变更时自动失效
+    data_fingerprint = hashlib.md5(
+        f"{len(merged_df)}_{merged_df['机台号'].nunique()}_{merged_df['_timestamp'].max()}".encode()
+    ).hexdigest()[:8]
+    cache_key = f"analysis_{min_hours}_{oee_threshold}_{'_'.join(sorted(machines))}_{data_fingerprint}"
     if 'analysis_cache' not in st.session_state:
         st.session_state['analysis_cache'] = {}
 
@@ -193,7 +199,7 @@ def compute_machine_stats(merged_df, machine):
         oee = df['设备稼动率'].clip(0, 1)
         stats['avg_oee'] = round(oee.mean(), 4)
         stats['median_oee'] = round(oee.median(), 4)
-        stats['hours_above_90'] = int((oee >= 0.9).sum())
+        stats['hours_above_90'] = int((oee >= DEFAULT_OEE_THRESHOLD).sum())
 
         if 'oee_abnormal' in df.columns:
             stats['abnormal_count'] = int(df['oee_abnormal'].sum())
@@ -216,10 +222,7 @@ def compute_param_oee_correlation(merged_df, machine):
     oee = df['设备稼动率'].clip(0, 1)
 
     # 获取所有工艺参数列
-    param_groups = get_param_groups()
-    all_params = []
-    for group_params in param_groups.values():
-        all_params.extend(group_params)
+    all_params = get_all_params()
 
     valid_params = [p for p in all_params if p in df.columns]
     if not valid_params:
@@ -267,9 +270,9 @@ def get_all_machines_oee_ranking(merged_df):
             '机台号': machine,
             '平均OEE': round(oee.mean(), 4),
             'OEE中位数': round(oee.median(), 4),
-            '≥90%时数': int((oee >= 0.9).sum()),
+            '≥90%时数': int((oee >= DEFAULT_OEE_THRESHOLD).sum()),
             '总时数': len(oee),
-            '≥90%占比': round((oee >= 0.9).sum() / len(oee) * 100, 1),
+            '≥90%占比': round((oee >= DEFAULT_OEE_THRESHOLD).sum() / len(oee) * 100, 1),
         })
 
     ranking_df = pd.DataFrame(ranking)
